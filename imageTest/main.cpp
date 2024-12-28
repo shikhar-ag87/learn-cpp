@@ -5,7 +5,8 @@ int main()
     
     Image img("test.jpg");
 
-    img.addChromaticEffect();
+    // img.addChromaticEffect();
+    img.addBlur(5);
 
     img.write("test2.png");
 

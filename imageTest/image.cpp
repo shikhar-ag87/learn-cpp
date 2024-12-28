@@ -2,14 +2,12 @@
 #define STB_IMAGE_WRITE_IMPLEMENTATION
 
 #include <stdint.h>
-#include <string>
 #include <iostream>
 #include "stb_image.h"
 #include "stb_image_write.h"
 #include "kromo.cpp"
 
 
-using namespace std;
 
 enum ImageType {
     PNG, JPG, BMP, TGA
@@ -83,8 +81,8 @@ public:
 
     void resize(double fx, double fy) {
         
-        if (fx<=0) throw out_of_range("argument fx out of range");
-        if (fy<=0) throw out_of_range("argument fy out of range");
+        if (fx<=0) throw std::out_of_range("argument fx out of range");
+        if (fy<=0) throw std::out_of_range("argument fy out of range");
 
         double fxy = fx*fy;
         int nw = (int)((double)w*fx);
@@ -108,8 +106,8 @@ public:
     }
 
     void resizeToSize(int nw, int nh) {
-        if (nw<=0) throw out_of_range("argument nw out of range");
-        if (nh<=0) throw out_of_range("argument nh out of range");
+        if (nw<=0) throw std::out_of_range("argument nw out of range");
+        if (nh<=0) throw std::out_of_range("argument nh out of range");
 
         uint8_t* dstData;
         dstData = new uint8_t[nw*nh*channels];
@@ -138,10 +136,10 @@ public:
 
     void crop(int sx, int sy, int ex, int ey) {
         
-        if (sx<0 || sx >= ex) throw out_of_range("argument sx out of range");
-        if (sy<0 || sy >= ey) throw out_of_range("argument sy out of range");
-        if (ex>w || ex <= sx) throw out_of_range("argument ex out of range");
-        if (ey>h || ey <= sy) throw out_of_range("argument ey out of range");
+        if (sx<0 || sx >= ex) throw std::out_of_range("argument sx out of range");
+        if (sy<0 || sy >= ey) throw std::out_of_range("argument sy out of range");
+        if (ex>w || ex <= sx) throw std::out_of_range("argument ex out of range");
+        if (ey>h || ey <= sy) throw std::out_of_range("argument ey out of range");
 
 
         uint8_t* dstData;
@@ -169,8 +167,8 @@ public:
 
     void centerCrop(int nw, int nh) {
 
-        if (nw<=0 || nw>w) throw out_of_range("argument nw out of range");
-        if (nh<=0 || nh>h) throw out_of_range("argument nh out of range");
+        if (nw<=0 || nw>w) throw std::out_of_range("argument nw out of range");
+        if (nh<=0 || nh>h) throw std::out_of_range("argument nh out of range");
 
         uint8_t* dstData;
         dstData = new uint8_t[(nw)*(nh)*channels];
@@ -189,7 +187,7 @@ public:
     }
 
     void addImage(const Image& img) {
-        if(img.size != size || img.w != w || img.h != h) throw invalid_argument("argument img not of same size as current image");
+        if(img.size != size || img.w != w || img.h != h) throw std::invalid_argument("argument img not of same size as current image");
 
         for(int i=0; i<size; i++) {
             data[i] =  data[i] + img.data[i];
@@ -199,7 +197,7 @@ public:
 
     void addChromaticEffect(double strength=1.0) {
 
-        if (strength < 0.0 || strength > 1.0) throw out_of_range("argument strength out of range");
+        if (strength < 0.0 || strength > 1.0) throw std::out_of_range("argument strength out of range");
 
         uint8_t* dstData;
         dstData = new uint8_t[w*h*channels];
@@ -209,6 +207,73 @@ public:
         data = dstData;
     }
 
+    uint8_t* getPixelAt(int x, int y) {
+        uint8_t* ret;
+        ret = new uint8_t[channels];
+        int p = y*w + x;
+        for (int c = 0; c < channels; c++) {
+            ret[c] = data[p*channels+c];
+        }
+        
+        return ret;
+    }
+
+    void setPixelAt(int x, int y, uint8_t* srcData) {
+        int p = y*w + x;
+        for (int c = 0; c < channels; c++) {
+            data[p*channels+c] = srcData[c];
+        }
+
+    }
+
+    void addBlur(int radius=5) {
+        uint8_t* dstData;
+        dstData = new uint8_t[size];
+        double pixMat[(2*radius+1)*(2*radius+1)][3];
+        double gaussSum = 0;
+        double s = radius+5;
+        double sig = 2*s*s; // 2 * sigma^2
+        double e = 2.71828182845;
+        double pi = 3.14159265358;
+        for (int x = -radius; x <= radius; x++) {
+            for (int y = -radius; y <= radius; y++) {
+                double gauss = 1.0;
+                gauss = std::pow(e, -((double)(x*x+y*y))/(sig));
+                pixMat[(y+radius)*radius + (x+radius)][0] = x;
+                pixMat[(y+radius)*radius + (x+radius)][1] = y;
+                pixMat[(y+radius)*radius + (x+radius)][2] = gauss;
+                gaussSum += gauss;
+                // std::cout << x << "\t" << y << "\t" << gauss << std::endl; 
+            }
+        }
+        std::cout << gaussSum << std::endl; 
+
+        for (int i = 0; i < h; i++) {
+            for (int j = 0; j < w; j++) {
+
+                int p_x = i*w + j;
+                for (int c = 0; c < channels; c++) {
+                    double cSum=0;
+                    for (int p_i = 0; p_i < (2*radius+1)*(2*radius+1); p_i++) {
+                        int x = (j + pixMat[p_i][0]);
+                        int y = (i + pixMat[p_i][1]);
+                        
+                        uint8_t* p = ( (x<0) || (x>=w) || (y<0) || (y>=h) ) ? (new uint8_t[channels]{0}) : getPixelAt(x,y);
+                        
+                        cSum += p[c]*(pixMat[p_i][2]);
+
+                        delete p;
+                    }
+                    
+                    dstData[p_x*channels+c] = (cSum/gaussSum);//*(1.95);
+                }
+                
+            }
+        }
+
+        data = dstData;
+        
+    }
 
     uint8_t** splitChannels() {
         int s = w*h;
@@ -240,7 +305,7 @@ private:
         // nullptr if not found
         const char* ext = strrchr(filename, '.');
         if(ext == nullptr) return PNG; // png becomes default
-        pair<string, ImageType> exts[] = { 
+        std::pair<std::string, ImageType> exts[] = { 
             {".png", PNG},
             {".jpeg", JPG},
             {".jpg", JPG},
